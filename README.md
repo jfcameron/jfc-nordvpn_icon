@@ -2,4 +2,4 @@
 
 ## jfc-nordvpn_icon
 
-gtk icon for nordvpn. See demo/ for usage.
+gtk icon for nordvpn. work in progress
