@@ -1,5 +1,4 @@
 # © 2021 Joseph Cameron - All Rights Reserved
-
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 
 project(null)
