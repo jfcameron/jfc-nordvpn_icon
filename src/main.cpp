@@ -15,29 +15,6 @@
 // =-=-=-=-= ICON GRAPHICS LOADING =-=-=-=-=
 #include "./nordvpn-32-error.cpp"
 
-inline GdkPixbuf *get_connected_icon_graphic(const icon_type *const pGraphic)
-{
-    GdkPixbuf *pixbuf;
-
-    auto &graphic = *pGraphic;
-
-    pixbuf = gdk_pixbuf_new_from_data(
-        graphic.pixel_data, //ptr to beginning of data
-        GDK_COLORSPACE_RGB, //data has rgb channels (redundant, 
-                            //since enum only has 1 value)
-        TRUE, //data has an alpha channel
-        8, //each channel has 8 bits (hence rgba32)
-        graphic.width, //width in pixels
-        graphic.height, //height in pixels
-        4 * graphic.width, //stride (row length in bytes: 1 
-                           //byte per channel * 4 channels * width in pixels)
-        nullptr, //destroy functor, use to add user defined clean up
-        nullptr //user data for destroy functor
-        );
-
-    return pixbuf; 
-}
-
 enum class icon_name
 {
     initializing,
@@ -48,16 +25,55 @@ enum class icon_name
 
 using icon_collection_type = std::map<icon_name, GdkPixbuf *>;
 
+/// \brief global, stories icon graphics
+icon_collection_type icons; 
+
+/// \brief global, ptr to the gtk icon
+GtkStatusIcon *tray_icon;
+
 icon_collection_type init_icons()
 {
+    static const auto init_icon = [](const icon_type *const pGraphic)
+    {
+        GdkPixbuf *pixbuf;
+
+        auto &graphic = *pGraphic;
+
+        pixbuf = gdk_pixbuf_new_from_data(
+            graphic.pixel_data, //ptr to beginning of data
+            GDK_COLORSPACE_RGB, //data has rgb channels (redundant, 
+                                //since enum only has 1 value)
+            true, //data has an alpha channel
+            8, //each channel has 8 bits (hence rgba32)
+            graphic.width, //width in pixels
+            graphic.height, //height in pixels
+            4 * graphic.width, //stride (row length in bytes: 1 
+                               //byte per channel * 4 channels * width in pixels)
+            nullptr, //destroy functor, use to add user defined clean up
+            nullptr //user data for destroy functor
+            );
+
+        return pixbuf; 
+    };
+
     icon_collection_type output;
 
-    output[icon_name::initializing] = get_connected_icon_graphic(&nordvpn_32_default);
-    output[icon_name::connected] = get_connected_icon_graphic(&nordvpn_32_connected);
-    output[icon_name::disconnected] = get_connected_icon_graphic(&nordvpn_32_disconnected);
-    output[icon_name::error] = get_connected_icon_graphic(&nordvpn_32_error);
+    output[icon_name::initializing] = init_icon(&nordvpn_32_default);
+    output[icon_name::connected] = init_icon(&nordvpn_32_connected);
+    output[icon_name::disconnected] = init_icon(&nordvpn_32_disconnected);
+    output[icon_name::error] = init_icon(&nordvpn_32_error);
 
     return output;
+}
+
+void set_icon(const icon_name &name)
+{
+    gtk_status_icon_set_from_pixbuf(tray_icon, icons.at(name)); 
+}
+
+void set_tooltip(const std::string &aString)
+{
+    gtk_status_icon_set_tooltip_text(tray_icon, aString.c_str());
 }
 
 // =-=-=-=-= END ICON GRAPHICS LOADING =-=-=-=-=
@@ -237,9 +253,23 @@ static bool update()
 {
     auto status = get_nordvpn_status();
 
-    std::cout << status["Status"];
+    if (status["Status"] == "Connected") 
+    {
+        set_icon(icon_name::connected);
+        
+        set_tooltip(
+            status["Country"] + ", " + status["City"] + "\n" + 
+            status["Current server"] + "\n" +
+            status["Your new IP"] + "\n" +
+            status["Transfer"] + "\n" +
+            "Uptime: " + status["Uptime"]);
+    }
+    else if (status["Status"] == "Disconnected") 
+    {
+        set_icon(icon_name::disconnected);
 
-    std::cout << "\n";
+        set_tooltip("disconnected");
+    }
 
     return true;
 }
@@ -279,10 +309,11 @@ int main(int argc, char *argv[])
 
         gtk_init(&argc, &argv);
 
-        if (auto tray_icon = gtk_status_icon_new())
+        if (tray_icon = gtk_status_icon_new())
         {
             gtk_status_icon_set_visible (tray_icon, true);
 
+            //TODO: add dropdown menu for selecting VPN server etc.
             /*g_signal_connect(G_OBJECT(tray_icon), 
                     "activate", 
                     G_CALLBACK([](){
@@ -293,12 +324,11 @@ int main(int argc, char *argv[])
                    nullptr);*/
             //nordvpn_32_default
 
-            const auto icons = init_icons();
+            icons = init_icons();
 
-            gtk_status_icon_set_from_pixbuf(tray_icon, 
-                icons.at(icon_name::disconnected)); 
+            set_icon(icon_name::initializing);
 
-            gtk_status_icon_set_tooltip_text(tray_icon, "aToolTip.c_str()");
+            set_tooltip("aToolTip.c_str()");
         }
         else throw std::runtime_error("could not init tray icon");
 
