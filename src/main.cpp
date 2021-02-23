@@ -12,7 +12,7 @@
 
 /// \brief runs a shell command, returns the standard output 
 /// as a stringstream
-std::stringstream run_command(const std::string &aCommand) 
+std::stringstream run_command(const std::string aCommand) 
 {
     std::unique_ptr<FILE, std::function<void(FILE *const)>> pFile([&]()
         {
@@ -31,12 +31,23 @@ std::stringstream run_command(const std::string &aCommand)
     for (char c; c != EOF; c = static_cast<decltype(c)>(std::fgetc(pFile.get()))) 
         output << c;
 
+    // Skips first line IF its the nord update notice. TODO: move this out to a
+    // separate function OR add a vistor
+    std::string line;
+    std::getline(output, line);
+
+    if (const auto search (line.find("A new version of NordVPN")); 
+        search == std::string::npos) 
+    {
+        output.clear();
+        output.seekg(0);
+    }
+
     return output;
 }
 
 /// \brief type used to model the return of nordvpn status command
-using nordvpn_status_type = std::unordered_map</*name*/std::string, 
-    /*value*/std::string>;
+using nordvpn_status_type = std::unordered_map</*name*/std::string, /*value*/std::string>;
 
 /// \brief returns the nordvpn program status as a map
 const nordvpn_status_type get_nordvpn_status()
@@ -49,7 +60,7 @@ const nordvpn_status_type get_nordvpn_status()
     {
         static const std::string DELIMITER(": ");
 
-        if (auto search(line.find(DELIMITER)); 
+        if (const auto search(line.find(DELIMITER)); 
             search != std::string::npos && 
             search < line.size() - DELIMITER.size())
         {
@@ -61,8 +72,11 @@ const nordvpn_status_type get_nordvpn_status()
     return state;
 }
 
+/// \brief type used to model a country
+using nordvpn_country_type = std::string;
+
 /// \brief type used to model the return of nordvpn countries command
-using nordvpn_countries_type = std::vector<std::string>;
+using nordvpn_countries_type = std::vector<nordvpn_country_type>;
 
 /// \brief returns the nordvpn countries as a list
 const nordvpn_countries_type get_nordvpn_countries()
@@ -75,7 +89,19 @@ const nordvpn_countries_type get_nordvpn_countries()
     {
         std::string country;
 
+        size_t begin_offset(0);
+
         for (size_t i(0); i < line.size(); ++i)
+        {
+            if (std::isalpha(line[i])) 
+            {
+                begin_offset = i;
+
+                break;
+            }
+        }
+
+        for (size_t i(begin_offset); i < line.size(); ++i)
         {
             const auto &c = line[i];
 
@@ -94,16 +120,54 @@ const nordvpn_countries_type get_nordvpn_countries()
     return countries;
 }
 
+/// \brief type used to model the return of nordvpn cities command
+using nordvpn_cities_type = std::vector<std::string>;
+
+/// \brief returns the nordvpn cities as a list
+const nordvpn_cities_type get_nordvpn_cities(const nordvpn_country_type &aCountry)
+{
+    std::string command = std::string("nordvpn cities ") + aCountry;
+
+    auto output = run_command(command);
+
+    nordvpn_cities_type cities;
+
+    for (std::string line; std::getline(output, line);)
+    {
+        std::string country;
+
+        for (size_t i(0); i < line.size(); ++i)
+        {
+            const auto &c = line[i];
+
+            if (c == '\t' || i >=  line.size() - 1)
+            {
+                if (country.size()) cities.push_back(country);
+
+                country.clear();
+            }
+            else country += c;
+        }
+
+        cities.back().push_back(line.back());
+    }
+
+    return cities;
+}
+
+/// \brief connects to the specified country and city
 void nordvpn_connect(const std::string &aCountry, const std::string &aCity)
 {
     run_command("nordvpn connect " + aCountry + " " + aCity);
 }
 
+/// \brief connects to the specified country, or default if unspecified
 void nordvpn_connect(const std::string &aCountry = "")
 {
     run_command("nordvpn connect " + aCountry);
 }
 
+/// \brief disconnects from the vpn
 void nordvpn_disconnect()
 {
     run_command("nordvpn disconnect");
@@ -111,48 +175,79 @@ void nordvpn_disconnect()
 
 static bool update()
 {
+    /*auto status = get_nordvpn_status();
+
+    for (const auto &[name, value] : status)
     {
-        auto status = get_nordvpn_status();
-
-        for (const auto &[name, value] : status)
-        {
-            std::cout << name << ", " << value << "\n";
-        }
-
-        std::cout << "\n";
+        std::cout << name << ", " << value << "\n";
     }
+
+    std::cout << "\n";*/
 
     return true;
 }
 
 int main(int argc, char *argv[])
 {
+    try
     {
-        const auto countries = get_nordvpn_countries();
-        
-        for (auto &a : countries) std::cout << a << "\n";
+        //status
+        { 
+            auto status = get_nordvpn_status();
+
+            for (const auto &[name, value] : status)
+            {
+                std::cout 
+                << "{" << name  << ", " << name.size()  << "}" << ", " 
+                << "{" << value << ", " << value.size() << "}"
+                << "\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        // Get countries list
+        { 
+            const auto countries = get_nordvpn_countries();
+            
+            for (auto &a : countries) 
+            {
+                std::cout << a << "\n"; 
+
+                const auto cities = get_nordvpn_cities(a);
+
+                for (auto &b : cities) 
+                {
+                    std::cout << b << "\n";
+                }
+
+                std::cout << "=======\n";
+            }
+        }
+
+        /*gtk_init(&argc, &argv);
+
+        g_timeout_add_seconds(1, [](void *const vp) 
+            {
+                auto token = reinterpret_cast<std::string *>(vp);
+
+                update();
+
+                static auto UPDATE_RATE_SECONDS(5);
+
+                g_timeout_add_seconds(UPDATE_RATE_SECONDS, 
+                    reinterpret_cast<GSourceFunc>(update), nullptr);
+
+                return int(0);
+            }, 
+            nullptr);
+
+        gtk_main();*/
     }
-
-    std::cout << "===============\n";
-
-    gtk_init(&argc, &argv);
-
-    g_timeout_add_seconds(1, [](void *const vp) 
-        {
-            auto token = reinterpret_cast<std::string *>(vp);
-
-            update();
-
-            static auto UPDATE_RATE_SECONDS(5);
-
-            g_timeout_add_seconds(UPDATE_RATE_SECONDS, 
-                reinterpret_cast<GSourceFunc>(update), nullptr);
-
-            return int(0);
-        }, 
-        nullptr);
-
-    gtk_main();
+    catch (const std::exception e)
+    {
+        std::cout << "error: " << e.what() << "\n";
+    }
 
     return EXIT_SUCCESS;
 }
