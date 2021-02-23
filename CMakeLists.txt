@@ -23,7 +23,6 @@ jfc_project(executable
 
     PUBLIC_INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-#        ${dependencyname_INCLUDE_DIRECTORIES} 
 
     PRIVATE_INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}/src/include
@@ -38,9 +37,6 @@ jfc_project(executable
         ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-default.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-disconnected.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-error.cpp
-
-#    DEPENDENCIES
-#        "dependencyname"
 )
 
 if (NOT ${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
