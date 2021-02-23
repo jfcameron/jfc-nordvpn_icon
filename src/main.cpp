@@ -46,6 +46,24 @@ std::stringstream run_command(const std::string aCommand)
     return output;
 }
 
+/// \brief used to skip junk found at the beginning of some output
+size_t find_first_alpha(const std::string &line)
+{
+    size_t begin_offset(0);
+
+    for (size_t i(0); i < line.size(); ++i)
+    {
+        if (std::isalpha(line[i])) 
+        {
+            begin_offset = i;
+
+            break;
+        }
+    }
+
+    return begin_offset;
+}
+
 /// \brief type used to model the return of nordvpn status command
 using nordvpn_status_type = std::unordered_map</*name*/std::string, /*value*/std::string>;
 
@@ -64,7 +82,9 @@ const nordvpn_status_type get_nordvpn_status()
             search != std::string::npos && 
             search < line.size() - DELIMITER.size())
         {
-            state[line.substr(0, search)] = 
+            const auto offset = find_first_alpha(line);
+
+            state[line.substr(offset, search - offset)] = 
                 line.substr(search + DELIMITER.size(), line.size());
         }
     }
@@ -89,19 +109,7 @@ const nordvpn_countries_type get_nordvpn_countries()
     {
         std::string country;
 
-        size_t begin_offset(0);
-
-        for (size_t i(0); i < line.size(); ++i)
-        {
-            if (std::isalpha(line[i])) 
-            {
-                begin_offset = i;
-
-                break;
-            }
-        }
-
-        for (size_t i(begin_offset); i < line.size(); ++i)
+        for (size_t i(find_first_alpha(line)); i < line.size(); ++i)
         {
             const auto &c = line[i];
 
@@ -136,7 +144,7 @@ const nordvpn_cities_type get_nordvpn_cities(const nordvpn_country_type &aCountr
     {
         std::string country;
 
-        for (size_t i(0); i < line.size(); ++i)
+        for (size_t i(find_first_alpha(line)); i < line.size(); ++i)
         {
             const auto &c = line[i];
 
@@ -175,14 +183,11 @@ void nordvpn_disconnect()
 
 static bool update()
 {
-    /*auto status = get_nordvpn_status();
+    auto status = get_nordvpn_status();
 
-    for (const auto &[name, value] : status)
-    {
-        std::cout << name << ", " << value << "\n";
-    }
+    std::cout << status["Status"];
 
-    std::cout << "\n";*/
+    std::cout << "\n";
 
     return true;
 }
@@ -196,12 +201,7 @@ int main(int argc, char *argv[])
             auto status = get_nordvpn_status();
 
             for (const auto &[name, value] : status)
-            {
-                std::cout 
-                << "{" << name  << ", " << name.size()  << "}" << ", " 
-                << "{" << value << ", " << value.size() << "}"
-                << "\n";
-            }
+                std::cout << name  << ", " << value << "\n";
 
             std::cout << "\n";
         }
@@ -218,14 +218,14 @@ int main(int argc, char *argv[])
 
                 for (auto &b : cities) 
                 {
-                    std::cout << b << "\n";
+                    std::cout << " " << b << "\n";
                 }
 
-                std::cout << "=======\n";
+                std::cout << "\n";
             }
         }
 
-        /*gtk_init(&argc, &argv);
+        gtk_init(&argc, &argv);
 
         g_timeout_add_seconds(1, [](void *const vp) 
             {
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
             }, 
             nullptr);
 
-        gtk_main();*/
+        gtk_main();
     }
     catch (const std::exception e)
     {
