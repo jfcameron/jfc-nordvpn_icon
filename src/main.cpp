@@ -12,7 +12,7 @@
 
 /// \brief runs a shell command, returns the standard output 
 /// as a stringstream
-std::stringstream run_command(const std::string aCommand) 
+std::stringstream run_command(const std::string &aCommand) 
 {
     std::unique_ptr<FILE, std::function<void(FILE *const)>> pFile([&]()
         {
