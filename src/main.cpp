@@ -10,6 +10,12 @@
 
 #include <gtk/gtk.h>
 
+//TODO: refactor graphics
+#include "./nordvpn-32-connected.cpp"
+#include "./nordvpn-32-default.cpp"
+#include "./nordvpn-32-disconnected.cpp"
+#include "./nordvpn-32-error.cpp"
+
 /// \brief runs a shell command, returns the standard output 
 /// as a stringstream
 std::stringstream run_command(const std::string &aCommand) 
@@ -226,6 +232,25 @@ int main(int argc, char *argv[])
         }
 
         gtk_init(&argc, &argv);
+
+        if (auto tray_icon = gtk_status_icon_new())
+        {
+            gtk_status_icon_set_visible (tray_icon, true);
+
+            /*g_signal_connect(G_OBJECT(tray_icon), 
+                    "activate", 
+                    G_CALLBACK([](){
+                        system(std::string(config::get_browser_command())
+                                .append(" ")
+                                .append("https://www.wanikani.com/")
+                                .c_str());}),
+                   nullptr);*/
+            //nordvpn_32_default
+            gtk_status_icon_set_from_pixbuf(tray_icon, get_connected_icon_graphic()); 
+
+            gtk_status_icon_set_tooltip_text(tray_icon, "aToolTip.c_str()");
+        }
+        else throw std::runtime_error("could not init tray icon");
 
         g_timeout_add_seconds(1, [](void *const vp) 
             {

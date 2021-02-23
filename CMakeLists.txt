@@ -25,7 +25,6 @@ jfc_project(executable
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 #        ${dependencyname_INCLUDE_DIRECTORIES} 
 
-
     PRIVATE_INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}/src/include
         ${GTK3_INCLUDE_DIRS}
@@ -35,6 +34,10 @@ jfc_project(executable
 
     SOURCE_LIST
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-connected.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-default.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-disconnected.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/nordvpn-32-error.cpp
 
 #    DEPENDENCIES
 #        "dependencyname"
