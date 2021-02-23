@@ -1,12 +1,15 @@
 /* GIMP RGBA C-Source image dump (nordvpn-32-connected.c) */
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
-static const struct {
-  guint  	 width;
-  guint  	 height;
-  guint  	 bytes_per_pixel; /* 2:RGB16, 3:RGB, 4:RGBA */ 
-  guint8  	 pixel_data[32 * 32 * 4 + 1];
-} nordvpn_32_connected = {
+struct icon_type
+{
+    guint width;
+    guint height;
+    guint bytes_per_pixel; /* 2:RGB16, 3:RGB, 4:RGBA */ 
+    guint8 pixel_data[32 * 32 * 4 + 1];
+};
+
+static const icon_type nordvpn_32_connected = {
   32, 32, 4,
   "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
   "\000\000\000\000'I\222\020(H\221Z'H\221\234(H\221\315(H\221\354(H\221\374(H\221\374"
@@ -180,31 +183,4 @@ static const struct {
   "y\304\020\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
   "\000\000\000\000\000\000\000\000",
 };
-
-#include <mutex>
-
-inline GdkPixbuf *get_connected_icon_graphic()
-{
-    static GdkPixbuf *pixbuf;
-    static std::once_flag flag;
-
-    std::call_once(flag, []()
-        {
-            auto &graphic = nordvpn_32_connected;
-
-            pixbuf = gdk_pixbuf_new_from_data(
-                    graphic.pixel_data, //ptr to beginning of data
-                    GDK_COLORSPACE_RGB, //data has rgb channels (redundant, since enum only has 1 value)
-                    TRUE, //data has an alpha channel
-                    8, //each channel has 8 bits (hence rgba32)
-                    graphic.width, //width in pixels
-                    graphic.height, //height in pixels
-                    4 * graphic.width, //stride (row length in bytes: 1 byte per channel * 4 channels * width in pixels)
-                    nullptr, //destroy functor, use to add user defined clean up
-                    nullptr //user data for destroy functor
-                    );
-        });
-
-    return pixbuf; 
-}
 

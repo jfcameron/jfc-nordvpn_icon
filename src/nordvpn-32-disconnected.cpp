@@ -1,12 +1,9 @@
 /* GIMP RGBA C-Source image dump (nordvpn-32-disconnected.c) */
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
-static const struct {
-  guint  	 width;
-  guint  	 height;
-  guint  	 bytes_per_pixel; /* 2:RGB16, 3:RGB, 4:RGBA */ 
-  guint8 	 pixel_data[32 * 32 * 4 + 1];
-} nordvpn_32_disconnected = {
+#include "./nordvpn-32-default.cpp"
+
+static const icon_type nordvpn_32_disconnected = {
   32, 32, 4,
   "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
   "\000\000\000\000'I\222\020(H\221Z'H\221\234(H\221\315(H\221\354(H\221\374(H\221\374"

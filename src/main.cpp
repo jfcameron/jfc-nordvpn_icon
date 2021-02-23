@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -11,10 +12,55 @@
 #include <gtk/gtk.h>
 
 //TODO: refactor graphics
-#include "./nordvpn-32-connected.cpp"
-#include "./nordvpn-32-default.cpp"
-#include "./nordvpn-32-disconnected.cpp"
+// =-=-=-=-= ICON GRAPHICS LOADING =-=-=-=-=
 #include "./nordvpn-32-error.cpp"
+
+inline GdkPixbuf *get_connected_icon_graphic(const icon_type *const pGraphic)
+{
+    GdkPixbuf *pixbuf;
+
+    auto &graphic = *pGraphic;
+
+    pixbuf = gdk_pixbuf_new_from_data(
+        graphic.pixel_data, //ptr to beginning of data
+        GDK_COLORSPACE_RGB, //data has rgb channels (redundant, 
+                            //since enum only has 1 value)
+        TRUE, //data has an alpha channel
+        8, //each channel has 8 bits (hence rgba32)
+        graphic.width, //width in pixels
+        graphic.height, //height in pixels
+        4 * graphic.width, //stride (row length in bytes: 1 
+                           //byte per channel * 4 channels * width in pixels)
+        nullptr, //destroy functor, use to add user defined clean up
+        nullptr //user data for destroy functor
+        );
+
+    return pixbuf; 
+}
+
+enum class icon_name
+{
+    initializing,
+    connected,
+    disconnected,
+    error
+};
+
+using icon_collection_type = std::map<icon_name, GdkPixbuf *>;
+
+icon_collection_type init_icons()
+{
+    icon_collection_type output;
+
+    output[icon_name::initializing] = get_connected_icon_graphic(&nordvpn_32_default);
+    output[icon_name::connected] = get_connected_icon_graphic(&nordvpn_32_connected);
+    output[icon_name::disconnected] = get_connected_icon_graphic(&nordvpn_32_disconnected);
+    output[icon_name::error] = get_connected_icon_graphic(&nordvpn_32_error);
+
+    return output;
+}
+
+// =-=-=-=-= END ICON GRAPHICS LOADING =-=-=-=-=
 
 /// \brief runs a shell command, returns the standard output 
 /// as a stringstream
@@ -246,7 +292,11 @@ int main(int argc, char *argv[])
                                 .c_str());}),
                    nullptr);*/
             //nordvpn_32_default
-            gtk_status_icon_set_from_pixbuf(tray_icon, get_connected_icon_graphic()); 
+
+            const auto icons = init_icons();
+
+            gtk_status_icon_set_from_pixbuf(tray_icon, 
+                icons.at(icon_name::disconnected)); 
 
             gtk_status_icon_set_tooltip_text(tray_icon, "aToolTip.c_str()");
         }
