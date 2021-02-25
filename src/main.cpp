@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <gtk/gtk.h>
+#include <glib.h>
 
 //TODO: refactor graphics
 // =-=-=-=-= ICON GRAPHICS LOADING =-=-=-=-=
@@ -75,7 +76,6 @@ void set_tooltip(const std::string &aString)
 {
     gtk_status_icon_set_tooltip_text(tray_icon, aString.c_str());
 }
-
 // =-=-=-=-= END ICON GRAPHICS LOADING =-=-=-=-=
 
 /// \brief runs a shell command, returns the standard output 
@@ -115,6 +115,7 @@ std::stringstream run_command(const std::string &aCommand)
 }
 
 /// \brief used to skip junk found at the beginning of some output
+//TODO: end is trustworthy. walk backward until last nonwhitespace?
 size_t find_first_alpha(const std::string &line)
 {
     size_t begin_offset(0);
@@ -274,55 +275,224 @@ static bool update()
     return true;
 }
 
+/*menu_infos_t* menu_infos_create()
+{
+    //menu_infos_t* mis = g_new(menu_infos_t, 1);
+
+    size_t i;
+    for(i=0; i<MENU_COUNT; ++i)
+        menu_info_init(mis, &mis->menu_info[i], i);
+
+    //return mis;
+    return nullptr;
+}*/
+
+/// \brief creates the popup menu
+GtkMenu *create_menu()
+{
+    GtkWidget* widget = gtk_menu_new();
+
+    return GTK_MENU(widget);
+}
+
+/// \brief used to offset items when adding to menu
+static int h(0);
+
+struct data
+{
+    std::string foo;
+    GtkWidget *entry;
+};
+
+std::vector<std::string*> callback_userdata_buffer;
+
+std::string *testy = new std::string("Canada");
+
+void menu_item_click_handler(GtkWidget *widget, gpointer pData)
+{
+    auto *pString = (std::string *)pData;
+
+    nordvpn_connect(pString ? *pString : "");
+}
+int asdf(123);
+
+void add_menu_item(GtkMenu *menu, const std::string &aName, 
+    GCallback aOnClick, 
+    gpointer aData = nullptr)
+{
+    GtkWidget* item = gtk_menu_item_new();
+
+    GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_container_add(GTK_CONTAINER(item), hbox);
+
+    GtkWidget* label = gtk_label_new(nullptr);
+
+    gtk_label_set_markup(GTK_LABEL(label), aName.c_str());
+
+    gtk_container_add(GTK_CONTAINER(hbox), label);
+
+    //if(icon)
+    {
+        //GtkWidget* image = gtk_image_new_from_icon_name(icon, 
+        //GTK_ICON_SIZE_MENU);
+        //gtk_container_add(GTK_CONTAINER(hbox), image);
+    }
+
+    //if(tooltip) 
+    {
+        //systray_set_tooltip(item, tooltip);
+    }
+
+    if (aOnClick)
+    {
+        g_signal_connect(G_OBJECT(item), "activate", 
+            G_CALLBACK(aOnClick),
+            aData);
+    }
+
+    gtk_menu_attach(menu, item,
+            0,1,
+            h,1 + h);
+
+    h+=1;
+
+    gtk_widget_show_all(item);
+}
+
+GtkMenu *add_submenu(GtkMenu *menu, const std::string &aName)
+{
+    // submenu
+    GtkWidget* submenu = gtk_menu_new();
+
+    // item
+    GtkWidget* item = gtk_menu_item_new();
+
+    GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_container_add(GTK_CONTAINER(item), hbox);
+
+    GtkWidget* label = gtk_label_new(aName.c_str());
+    gtk_container_add(GTK_CONTAINER(hbox), label);
+
+    gtk_menu_attach(menu, item,
+        0,1,
+        h,1 + h);
+
+    h+=1;
+
+    gtk_widget_show_all(item);
+
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), submenu);
+
+    return GTK_MENU(submenu);
+}
+
+using countries_to_cities_type = std::map<nordvpn_country_type, nordvpn_cities_type>;
+
+countries_to_cities_type country_to_cities_map;
+
+
+void show_menu()
+{
+    static GtkMenu *menu;
+    
+    static bool once = true;
+    if (once)
+    {
+        once = false;
+
+        menu = create_menu();
+
+        auto pConnectMenu = add_submenu(menu, "Connect");
+
+        add_menu_item(menu, "Disconnect", 
+            []()
+            {
+                nordvpn_disconnect();
+            });
+
+        for (size_t i(0); i < callback_userdata_buffer.size(); ++i)
+            delete callback_userdata_buffer[i];
+        
+        callback_userdata_buffer.clear();
+
+        int i = 0;
+            
+        add_menu_item(pConnectMenu, "<b>recommended</b>", G_CALLBACK(menu_item_click_handler), nullptr);
+
+        for (auto &[country, cities] : country_to_cities_map)
+        {
+            if (cities.size() == 1)
+            {
+                callback_userdata_buffer.push_back(new std::string(country));
+
+                add_menu_item(pConnectMenu, country, G_CALLBACK(menu_item_click_handler), 
+                    callback_userdata_buffer[i]);
+                
+                i++;
+            }
+            else if (cities.size() > 1)
+            {
+                auto pCountryMenu = add_submenu(pConnectMenu, country);
+
+                callback_userdata_buffer.push_back(new std::string(country));
+
+                add_menu_item(pCountryMenu, "<b>recommended</b>", G_CALLBACK(menu_item_click_handler), 
+                    callback_userdata_buffer[i]);
+
+                i++;
+
+                for (auto &city : cities) 
+                {
+                    callback_userdata_buffer.push_back(
+                        new std::string(country + " " + city));
+
+                    add_menu_item(pCountryMenu, city, G_CALLBACK(menu_item_click_handler), 
+                        callback_userdata_buffer[i]);
+
+                    i++;
+                }
+            }
+        }
+    }
+    
+    // show the menu
+    gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0, 0);
+}
+
 int main(int argc, char *argv[])
 {
     try
     {
-        //status
-        { 
-            auto status = get_nordvpn_status();
-
-            for (const auto &[name, value] : status)
-                std::cout << name  << ", " << value << "\n";
-
-            std::cout << "\n";
-        }
-
         // Get countries list
         { 
             const auto countries = get_nordvpn_countries();
             
             for (auto &a : countries) 
             {
-                std::cout << a << "\n"; 
-
                 const auto cities = get_nordvpn_cities(a);
 
                 for (auto &b : cities) 
                 {
-                    std::cout << " " << b << "\n";
+                    country_to_cities_map[a].push_back(b);
                 }
-
-                std::cout << "\n";
             }
         }
 
         gtk_init(&argc, &argv);
 
+        auto pCombo = gtk_combo_box_new();
+
         if (tray_icon = gtk_status_icon_new())
         {
             gtk_status_icon_set_visible (tray_icon, true);
 
-            //TODO: add dropdown menu for selecting VPN server etc.
-            /*g_signal_connect(G_OBJECT(tray_icon), 
-                    "activate", 
-                    G_CALLBACK([](){
-                        system(std::string(config::get_browser_command())
-                                .append(" ")
-                                .append("https://www.wanikani.com/")
-                                .c_str());}),
-                   nullptr);*/
-            //nordvpn_32_default
+            g_signal_connect(G_OBJECT(tray_icon), 
+                "activate", 
+                G_CALLBACK([]()
+                {
+                    show_menu();
+                }),
+                nullptr);
 
             icons = init_icons();
 
