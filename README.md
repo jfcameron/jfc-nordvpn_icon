@@ -2,6 +2,15 @@
 
 ## jfc-nordvpn_icon
 
-gtk icon for nordvpn. 
-Complete: icon displays connected/disconnected. if connected, tooltip displays status info.
-Todo: dropdown menu to disconnect, connect to default, connect to specific country/city.
+system tray icon for the nordvpn cli for linux.
+
+Features:
+ - Icon displays a red X if disconnected, a green check if connected.
+ - Hovering over the icon will display status (connection info, bytes up & down)
+ - Pressing the icon opens a connection/disconnection menu. You can connect by country, city or recommended
+
+Todo:
+CI.
+Code quality is very poor.
+tests.
+

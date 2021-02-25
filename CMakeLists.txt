@@ -16,7 +16,7 @@ PKG_CHECK_MODULES(GTK3 REQUIRED gtk+-3.0)
 
 jfc_project(executable
     NAME "jfcnordvpnicon"
-    VERSION 0.0
+    VERSION 1.0
     DESCRIPTION "gtk icon for nordvpn"
     C++_STANDARD 17
     C_STANDARD 90
