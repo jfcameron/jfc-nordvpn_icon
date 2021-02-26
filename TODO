@@ -1,0 +1,7 @@
+handle no internet connection
+decide when to rebuild country/city data. refresh button?
+handle not authed? same as no internet?
+
+so if no net/no auth, have a refresh button. hide connect/show.
+if authed, show connect, disconnect, refresh
+
