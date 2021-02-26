@@ -1,11 +1,14 @@
 // © 2021 Joseph Cameron - All Rights Reserved
 #include <cstdlib>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <string>
 #include <string>
 #include <vector>
 
@@ -70,6 +73,7 @@ icon_collection_type init_icons()
 void set_icon(const icon_name &name)
 {
     gtk_status_icon_set_from_pixbuf(tray_icon, icons.at(name)); 
+
 }
 
 void set_tooltip(const std::string &aString)
@@ -176,22 +180,30 @@ const nordvpn_countries_type get_nordvpn_countries()
 
     for (std::string line; std::getline(output, line);)
     {
-        std::string country;
-
-        for (size_t i(find_first_alpha(line)); i < line.size(); ++i)
+        for (;;)
         {
-            const auto &c = line[i];
-
-            if (c == '\t' || i >=  line.size() - 1)
+            static const std::string DELIMITER = ", ";
+            if (auto search = line.find(DELIMITER); search != std::string::npos)
             {
-                if (country.size()) countries.push_back(country);
-
-                country.clear();
+                countries.push_back(line.substr(0, search));
+                line = line.substr(search+DELIMITER.size(), line.size()-1);
             }
-            else country += c;
+            else
+            {
+                countries.push_back(line.substr(0, line.size()-0));
+                break;
+            }
         }
+    }
 
-        countries.back().push_back(line.back());
+    for (auto i = countries[0].size()-1; i > 0; --i)
+    {
+        if (!std::isalpha(countries[0][i]) && countries[0][i] != '_')
+        {
+            countries[0] = countries[0].substr(i+1, countries[0].size());
+
+            break;
+        }
     }
 
     return countries;
@@ -203,30 +215,37 @@ using nordvpn_cities_type = std::vector<std::string>;
 /// \brief returns the nordvpn cities as a list
 const nordvpn_cities_type get_nordvpn_cities(const nordvpn_country_type &aCountry)
 {
-    std::string command = std::string("nordvpn cities ") + aCountry;
-
-    auto output = run_command(command);
-
     nordvpn_cities_type cities;
+
+    std::string command = std::string("nordvpn cities ") + aCountry;
+    auto output = run_command(command);
 
     for (std::string line; std::getline(output, line);)
     {
-        std::string country;
-
-        for (size_t i(find_first_alpha(line)); i < line.size(); ++i)
+        for (;;)
         {
-            const auto &c = line[i];
-
-            if (c == '\t' || i >=  line.size() - 1)
+            static const std::string DELIMITER = ", ";
+            if (auto search = line.find(DELIMITER); search != std::string::npos)
             {
-                if (country.size()) cities.push_back(country);
-
-                country.clear();
+                cities.push_back(line.substr(0, search));
+                line = line.substr(search+DELIMITER.size(), line.size()-1);
             }
-            else country += c;
+            else
+            {
+                cities.push_back(line.substr(0, line.size()-0));
+                break;
+            }
         }
+    }
 
-        cities.back().push_back(line.back());
+    for (auto i = cities[0].size()-1; i > 0; --i)
+    {
+        if (!std::isalpha(cities[0][i]) && cities[0][i] != '_')
+        {
+            cities[0] = cities[0].substr(i+1, cities[0].size());
+
+            break;
+        }
     }
 
     return cities;
@@ -275,18 +294,6 @@ static bool update()
     return true;
 }
 
-/*menu_infos_t* menu_infos_create()
-{
-    //menu_infos_t* mis = g_new(menu_infos_t, 1);
-
-    size_t i;
-    for(i=0; i<MENU_COUNT; ++i)
-        menu_info_init(mis, &mis->menu_info[i], i);
-
-    //return mis;
-    return nullptr;
-}*/
-
 /// \brief creates the popup menu
 GtkMenu *create_menu()
 {
@@ -314,7 +321,6 @@ void menu_item_click_handler(GtkWidget *widget, gpointer pData)
 
     nordvpn_connect(pString ? *pString : "");
 }
-int asdf(123);
 
 void add_menu_item(GtkMenu *menu, const std::string &aName, 
     GCallback aOnClick, 
@@ -389,7 +395,6 @@ GtkMenu *add_submenu(GtkMenu *menu, const std::string &aName)
 using countries_to_cities_type = std::map<nordvpn_country_type, nordvpn_cities_type>;
 
 countries_to_cities_type country_to_cities_map;
-
 
 void show_menu()
 {
@@ -470,7 +475,7 @@ int main(int argc, char *argv[])
             for (auto &a : countries) 
             {
                 const auto cities = get_nordvpn_cities(a);
-
+                
                 for (auto &b : cities) 
                 {
                     country_to_cities_map[a].push_back(b);
