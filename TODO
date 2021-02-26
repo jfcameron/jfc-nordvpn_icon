@@ -1,7 +1,14 @@
 handle no internet connection
-decide when to rebuild country/city data. refresh button?
-handle not authed? same as no internet?
+    - current behaviour is termination due to an unhandled exception
 
-so if no net/no auth, have a refresh button. hide connect/show.
+decide when to rebuild country/city data
+    1 a user's settings, 2 auth state 3 internet access state all affect the output of countries and cities commands.
+    solution: a simple refresh button? call commands on a timer?
+
+handle not authed? 
+    - unknown current behaviour but likely unhandled exception.
+    could it be handled with the same code i will have to write for no internet?
+
+if no net/no auth, have a refresh button. hide connect/show.
 if authed, show connect, disconnect, refresh
 
