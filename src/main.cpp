@@ -1,4 +1,5 @@
 // © 2021 Joseph Cameron - All Rights Reserved
+#include <optional>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
@@ -120,6 +121,7 @@ std::stringstream run_command(const std::string &aCommand)
 
 /// \brief used to skip junk found at the beginning of some output
 //TODO: end is trustworthy. walk backward until last nonwhitespace?
+// TODO: this is not reliable. The problem are ^ms and whitespace that nord outputs at the beginning of some of its outputs.
 size_t find_first_alpha(const std::string &line)
 {
     size_t begin_offset(0);
@@ -141,7 +143,7 @@ size_t find_first_alpha(const std::string &line)
 using nordvpn_status_type = std::unordered_map</*name*/std::string, /*value*/std::string>;
 
 /// \brief returns the nordvpn program status as a map
-const nordvpn_status_type get_nordvpn_status()
+const std::optional<nordvpn_status_type> get_nordvpn_status()
 {
     auto output(run_command("nordvpn status"));
 
@@ -162,7 +164,9 @@ const nordvpn_status_type get_nordvpn_status()
         }
     }
 
-    return state;
+    //TODO: catch exception, return empty optional
+
+    return {state};
 }
 
 /// \brief type used to model a country
@@ -172,7 +176,7 @@ using nordvpn_country_type = std::string;
 using nordvpn_countries_type = std::vector<nordvpn_country_type>;
 
 /// \brief returns the nordvpn countries as a list
-const nordvpn_countries_type get_nordvpn_countries()
+const std::optional<nordvpn_countries_type> get_nordvpn_countries()
 {
     auto output(run_command("nordvpn countries"));
 
@@ -206,14 +210,16 @@ const nordvpn_countries_type get_nordvpn_countries()
         }
     }
 
-    return countries;
+    //TODO: handle failure case, return {}
+
+    return {countries};
 }
 
 /// \brief type used to model the return of nordvpn cities command
 using nordvpn_cities_type = std::vector<std::string>;
 
 /// \brief returns the nordvpn cities as a list
-const nordvpn_cities_type get_nordvpn_cities(const nordvpn_country_type &aCountry)
+const std::optional<nordvpn_cities_type> get_nordvpn_cities(const nordvpn_country_type &aCountry)
 {
     nordvpn_cities_type cities;
 
@@ -248,7 +254,9 @@ const nordvpn_cities_type get_nordvpn_cities(const nordvpn_country_type &aCountr
         }
     }
 
-    return cities;
+    //TODO: handle failure case, return {}
+
+    return {cities};
 }
 
 /// \brief connects to the specified country and city
@@ -271,24 +279,34 @@ void nordvpn_disconnect()
 
 static bool update()
 {
-    auto status = get_nordvpn_status();
+    if (auto oStatus = get_nordvpn_status(); oStatus.has_value())
+    {
+        auto &status = *oStatus;
 
-    if (status["Status"] == "Connected") 
-    {
-        set_icon(icon_name::connected);
-        
-        set_tooltip(
-            status["Country"] + ", " + status["City"] + "\n" + 
-            status["Current server"] + "\n" +
-            status["Your new IP"] + "\n" +
-            status["Transfer"] + "\n" +
-            "Uptime: " + status["Uptime"]);
+        if (status["Status"] == "Connected") 
+        {
+            set_icon(icon_name::connected);
+            
+            set_tooltip(
+                status["Country"] + ", " + status["City"] + "\n" + 
+                status["Current server"] + "\n" +
+                status["Your new IP"] + "\n" +
+                status["Transfer"] + "\n" +
+                "Uptime: " + status["Uptime"]);
+        }
+        else if (status["Status"] == "Disconnected") 
+        {
+            set_icon(icon_name::disconnected);
+
+            set_tooltip("disconnected");
+        }
     }
-    else if (status["Status"] == "Disconnected") 
+    else
     {
+        //TODO: error state? User will want to know of connection issues
         set_icon(icon_name::disconnected);
 
-        set_tooltip("disconnected");
+        set_tooltip("status failed; retrying");
     }
 
     return true;
@@ -400,6 +418,8 @@ void show_menu()
 {
     static GtkMenu *menu;
     
+    //TODO separate menu construction from showing, 
+    // this should rebuild in the update loop, loop behaviour needs state (enum class likely enough)
     static bool once = true;
     if (once)
     {
@@ -468,18 +488,32 @@ int main(int argc, char *argv[])
 {
     try
     {
-        // Get countries list
+        // Get countries list. TODO: move this out to update
         { 
-            const auto countries = get_nordvpn_countries();
-            
-            for (auto &a : countries) 
+            if (auto oCountries = get_nordvpn_countries(); oCountries.has_value())
             {
-                const auto cities = get_nordvpn_cities(a);
-                
-                for (auto &b : cities) 
+                const auto &countries = *oCountries;
+
+                for (auto &a : countries) 
                 {
-                    country_to_cities_map[a].push_back(b);
+                    if (const auto oCities = get_nordvpn_cities(a); oCities.has_value())
+                    {
+                        const auto &cities = *oCities;
+
+                        for (auto &b : cities) 
+                        {
+                            country_to_cities_map[a].push_back(b);
+                        }
+                    }
+                    else
+                    {
+                        //TODO: cities call failed! goto disconnected loop
+                    }
                 }
+            }
+            else
+            {
+                //TODO: countries failed, go to disconnected loop
             }
         }
 
