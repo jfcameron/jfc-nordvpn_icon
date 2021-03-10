@@ -12,3 +12,47 @@ handle not authed?
 if no net/no auth, have a refresh button. hide connect/show.
 if authed, show connect, disconnect, refresh
 
+-= no internet work =-
+
+TODO: change all nordvpn_* functions to return optionals, since if there is no connection at call time, these functions will fail
+
+match string: "Please check your internet connection and try again."
+
+enum class mode_type
+{
+    connected
+    noconnection
+}
+
+mode_type mode = noconnection;
+
+void update()
+{
+    if (auto status = nordvpn_get_status())
+    {
+        if (status["status"] == "connected") icon = connected
+
+        tooltip = blah blah blah
+
+        if (bWasDisconnected)
+        {
+            if (auto countries = get_countries)
+            {
+                update country list, build country menu
+
+                if (auto cities = get_cities)
+                {
+                    build country->cities map, build city submenus
+                }
+            }
+
+            bWasDisconnected = false;
+        }
+    }
+    else
+    {
+        icon = noconnection
+
+        bWasDisconnected = true;
+    }
+}
