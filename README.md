@@ -9,8 +9,3 @@ Features:
  - Hovering over the icon will display status (connection info, bytes up & down)
  - Pressing the icon opens a connection/disconnection menu. You can connect by country, city or recommended
 
-Todo:
-CI.
-Code quality is very poor.
-tests.
-
