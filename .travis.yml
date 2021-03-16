@@ -9,7 +9,7 @@ matrix:
   include:
     # Build scripts
     - os: linux
-      name: build linux gcc
+      name: build linux x86 gcc
       compiler: gcc-8
       addons:
         apt:
@@ -28,28 +28,35 @@ matrix:
           cd workspace
           git submodule update --init --recursive
           git remote rename master origin
-          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native -Wno-deprecated-declarations -Wno-parentheses -Wno-unused-parameter -Wno-unused-variable" #-pedantic"
+          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native -Wno-deprecated-declarations -Wno-parentheses" #-pedantic"
           cmake --build .
           #ctest --extra-verbose
 
-#    - os: linux
-#      dist: bionic 
-#      arch: arm64
-#      name: build linux gcc
-#      compiler: gcc
-#      addons:
-#        apt:
-#          sources:
-#            - ubuntu-toolchain-r-test
-#          packages:
-#            - cmake
-#            - git
-#      script:
-#        - |
-#          cd workspace
-#          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-pedantic -Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native"
-#          make
-#          ctest --extra-verbose
+    - os: linux
+      dist: bionic 
+      arch: arm64
+      name: build linux arm gcc
+      compiler: gcc-8
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cmake
+            - git
+            - libgtk-3-dev
+            - gcc-8
+            - g++-8
+      script:
+        - |
+          export CC=/usr/bin/gcc-8
+          export CXX=/usr/bin/g++-8
+          cd workspace
+          git submodule update --init --recursive
+          git remote rename master origin
+          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native -Wno-deprecated-declarations -Wno-parentheses" #-pedantic"
+          cmake --build .
+          #ctest --extra-verbose
 #
 #    - os: osx
 #      name: build macos clang
