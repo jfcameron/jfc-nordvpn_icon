@@ -185,7 +185,6 @@ const std::optional<nordvpn_countries_type> get_nordvpn_countries()
     {
         nordvpn_countries_type countries;
 
-
         for (std::string line; std::getline(*output, line);)
         {
             for (;;)
@@ -458,7 +457,6 @@ void show_menu()
     gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0, 0);
 }
 
-
 enum class state_type
 {
     initializing,
@@ -589,6 +587,7 @@ namespace jfc
 
     application_directory_paths::application_directory_paths(std::string aApplicationName)
     {
+//TODO: since this COULD be a very tiny library, do header only and get rid of my cmake stuff here
 #if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin //...
         const std::string home(std::getenv("HOME"));
 
@@ -597,6 +596,7 @@ namespace jfc
         m_data_dir   = home + "/.local/share/" + aApplicationName + "/";
 #elif defined JFC_TARGET_PLATFORM_Windows
     //windows api to get user's appdata path...
+#error "unimplemented platform"
 #else
 #error "unsupported platform"
 #endif
@@ -638,13 +638,14 @@ class appdata final
 public:
     void write_to_log_file(const std::string &aMessage);
 
+    void write_to_version_file();
+
     appdata();
 };
 
 appdata::appdata()
 : path("nordvpn_icon")
-{
-}
+{}
 
 void appdata::write_to_log_file(const std::string &aMessage)
 {
@@ -653,6 +654,16 @@ void appdata::write_to_log_file(const std::string &aMessage)
     auto itt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     m_logfile << std::put_time(std::gmtime(&itt), "%FT%T: ") << aMessage << "\n";
+}
+
+void appdata::write_to_version_file()
+{
+    std::ofstream f(path.get_data_dir() + "version.txt");
+
+    f 
+        << "project remote: " << jfcnordvpnicon_BuildInfo_Git_Remote_URL << "\n"
+        << "git hash: " << jfcnordvpnicon_BuildInfo_Git_Commit << "\n"
+        << "build date: " << jfcnordvpnicon_BuildInfo_Git_Date << "\n";
 }
 
 // =============== END CONFIG STUFF
@@ -702,6 +713,10 @@ int main(int argc, char *argv[])
             "project remote: " << jfcnordvpnicon_BuildInfo_Git_Remote_URL << "\n"
             "git hash: " << jfcnordvpnicon_BuildInfo_Git_Commit << "\n"
             "build date: " << jfcnordvpnicon_BuildInfo_Git_Date << "\n";
+    }
+    else
+    {
+        data.write_to_version_file();
     }
 
     try
