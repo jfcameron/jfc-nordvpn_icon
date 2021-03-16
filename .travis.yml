@@ -49,8 +49,8 @@ matrix:
             - g++-8
       script:
         - |
-          export CC=/usr/bin/gcc-8
-          export CXX=/usr/bin/g++-8
+          #export CC=/usr/bin/gcc-8
+          #export CXX=/usr/bin/g++-8
           cd workspace
           git submodule update --init --recursive
           git remote rename master origin
