@@ -83,26 +83,27 @@ void set_tooltip(const std::string &aString)
 }
 // =-=-=-=-= END ICON GRAPHICS LOADING =-=-=-=-=
 
+#include <cerrno>
+#include <cstring>
+
 /// \brief runs a shell command, returns the standard output 
 /// as a stringstream
-std::stringstream run_command(const std::string &aCommand) 
+/// \warn return null if the command failed
+std::optional<std::stringstream> run_command(const std::string &aCommand) 
 {
-    std::unique_ptr<FILE, std::function<void(FILE *const)>> pFile([&]()
-        {
-            if (auto *const p = popen(aCommand.c_str(), "r")) return p;
+    FILE *const pFile([&]()
+    {
+        if (auto *const p = popen(aCommand.c_str(), "r")) return p;
 
-            throw std::runtime_error("Error opening pipe!\n");
-        }(),
-        [](FILE *const p)
-        {
-            if (pclose(p)) throw std::runtime_error(
-                "Command not found or exited with error status\n");
-        });
+        throw std::runtime_error("Error opening pipe!\n");
+    }());
 
     std::stringstream output;
 
-    for (char c; c != EOF; c = static_cast<decltype(c)>(std::fgetc(pFile.get()))) 
+    for (char c; c != EOF; c = static_cast<decltype(c)>(std::fgetc(pFile))) 
         output << c;
+
+    if (pclose(pFile)) return {}; //command failed case
 
     // Skips first line IF its the nord update notice. TODO: move this out to a
     // separate function OR add a vistor
@@ -145,28 +146,29 @@ using nordvpn_status_type = std::unordered_map</*name*/std::string, /*value*/std
 /// \brief returns the nordvpn program status as a map
 const std::optional<nordvpn_status_type> get_nordvpn_status()
 {
-    auto output(run_command("nordvpn status"));
-
-    nordvpn_status_type state;
-
-    for (std::string line; std::getline(output, line);)
+    if (auto output(run_command("nordvpn status")); output.has_value())
     {
-        static const std::string DELIMITER(": ");
+        nordvpn_status_type state;
 
-        if (const auto search(line.find(DELIMITER)); 
-            search != std::string::npos && 
-            search < line.size() - DELIMITER.size())
+        for (std::string line; std::getline(*output, line);)
         {
-            const auto offset = find_first_alpha(line);
+            static const std::string DELIMITER(": ");
 
-            state[line.substr(offset, search - offset)] = 
-                line.substr(search + DELIMITER.size(), line.size());
+            if (const auto search(line.find(DELIMITER)); 
+                search != std::string::npos && 
+                search < line.size() - DELIMITER.size())
+            {
+                const auto offset = find_first_alpha(line);
+
+                state[line.substr(offset, search - offset)] = 
+                    line.substr(search + DELIMITER.size(), line.size());
+            }
         }
+
+        return {state};
     }
-
-    //TODO: catch exception, return empty optional
-
-    return {state};
+    
+    return {};
 }
 
 /// \brief type used to model a country
@@ -175,46 +177,50 @@ using nordvpn_country_type = std::string;
 /// \brief type used to model the return of nordvpn countries command
 using nordvpn_countries_type = std::vector<nordvpn_country_type>;
 
+//TODO: consider supporting TTY case
 /// \brief returns the nordvpn countries as a list
 const std::optional<nordvpn_countries_type> get_nordvpn_countries()
 {
-    auto output(run_command("nordvpn countries"));
-
-    nordvpn_countries_type countries;
-
-    for (std::string line; std::getline(output, line);)
+    if (auto output(run_command("nordvpn countries")); output.has_value())
     {
-        for (;;)
+        nordvpn_countries_type countries;
+
+
+        for (std::string line; std::getline(*output, line);)
         {
-            static const std::string DELIMITER = ", ";
-            if (auto search = line.find(DELIMITER); search != std::string::npos)
+            for (;;)
             {
-                countries.push_back(line.substr(0, search));
-                line = line.substr(search+DELIMITER.size(), line.size()-1);
+                static const std::string DELIMITER = ", ";
+                if (auto search = line.find(DELIMITER); search != std::string::npos)
+                {
+                    countries.push_back(line.substr(0, search));
+                    line = line.substr(search+DELIMITER.size(), line.size()-1);
+                }
+                else
+                {
+                    countries.push_back(line.substr(0, line.size()-0));
+                    break;
+                }
             }
-            else
+        }
+
+        for (auto i = countries[0].size()-1; i > 0; --i)
+        {
+            if (!std::isalpha(countries[0][i]) && countries[0][i] != '_')
             {
-                countries.push_back(line.substr(0, line.size()-0));
+                countries[0] = countries[0].substr(i+1, countries[0].size());
+
                 break;
             }
         }
+
+        return countries;
     }
 
-    for (auto i = countries[0].size()-1; i > 0; --i)
-    {
-        if (!std::isalpha(countries[0][i]) && countries[0][i] != '_')
-        {
-            countries[0] = countries[0].substr(i+1, countries[0].size());
-
-            break;
-        }
-    }
-
-    //TODO: handle failure case, return {}
-
-    return {countries};
+    return {};
 }
 
+//TODO: consider supporting TTY case
 /// \brief type used to model the return of nordvpn cities command
 using nordvpn_cities_type = std::vector<std::string>;
 
@@ -224,39 +230,41 @@ const std::optional<nordvpn_cities_type> get_nordvpn_cities(const nordvpn_countr
     nordvpn_cities_type cities;
 
     std::string command = std::string("nordvpn cities ") + aCountry;
-    auto output = run_command(command);
-
-    for (std::string line; std::getline(output, line);)
+    
+    if (auto output = run_command(command); output.has_value())
     {
-        for (;;)
+        for (std::string line; std::getline(*output, line);)
         {
-            static const std::string DELIMITER = ", ";
-            if (auto search = line.find(DELIMITER); search != std::string::npos)
+            for (;;)
             {
-                cities.push_back(line.substr(0, search));
-                line = line.substr(search+DELIMITER.size(), line.size()-1);
+                static const std::string DELIMITER = ", ";
+                if (auto search = line.find(DELIMITER); search != std::string::npos)
+                {
+                    cities.push_back(line.substr(0, search));
+                    line = line.substr(search+DELIMITER.size(), line.size()-1);
+                }
+                else
+                {
+                    cities.push_back(line.substr(0, line.size()-0));
+                    break;
+                }
             }
-            else
+        }
+
+        for (auto i = cities[0].size()-1; i > 0; --i)
+        {
+            if (!std::isalpha(cities[0][i]) && cities[0][i] != '_')
             {
-                cities.push_back(line.substr(0, line.size()-0));
+                cities[0] = cities[0].substr(i+1, cities[0].size());
+
                 break;
             }
         }
+
+        return {cities};
     }
 
-    for (auto i = cities[0].size()-1; i > 0; --i)
-    {
-        if (!std::isalpha(cities[0][i]) && cities[0][i] != '_')
-        {
-            cities[0] = cities[0].substr(i+1, cities[0].size());
-
-            break;
-        }
-    }
-
-    //TODO: handle failure case, return {}
-
-    return {cities};
+    return {};
 }
 
 /// \brief connects to the specified country and city
@@ -277,40 +285,6 @@ void nordvpn_disconnect()
     run_command("nordvpn disconnect");
 }
 
-static bool update()
-{
-    if (auto oStatus = get_nordvpn_status(); oStatus.has_value())
-    {
-        auto &status = *oStatus;
-
-        if (status["Status"] == "Connected") 
-        {
-            set_icon(icon_name::connected);
-            
-            set_tooltip(
-                status["Country"] + ", " + status["City"] + "\n" + 
-                status["Current server"] + "\n" +
-                status["Your new IP"] + "\n" +
-                status["Transfer"] + "\n" +
-                "Uptime: " + status["Uptime"]);
-        }
-        else if (status["Status"] == "Disconnected") 
-        {
-            set_icon(icon_name::disconnected);
-
-            set_tooltip("disconnected");
-        }
-    }
-    else
-    {
-        //TODO: error state? User will want to know of connection issues
-        set_icon(icon_name::disconnected);
-
-        set_tooltip("status failed; retrying");
-    }
-
-    return true;
-}
 
 /// \brief creates the popup menu
 GtkMenu *create_menu()
@@ -484,12 +458,24 @@ void show_menu()
     gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0, 0);
 }
 
-int main(int argc, char *argv[])
+
+enum class state_type
 {
-    try
+    initializing,
+    status_loop
+};
+
+auto STATE = state_type::initializing;
+
+static bool update()
+{
+    switch(STATE)
     {
-        // Get countries list. TODO: move this out to update
+        case state_type::initializing:
         { 
+            set_tooltip("initializing. If the program loops endlessly here, check that 1: nordvpn is installed, "
+                "2: its configured, 3: your internet connection is working");
+
             if (auto oCountries = get_nordvpn_countries(); oCountries.has_value())
             {
                 const auto &countries = *oCountries;
@@ -505,18 +491,221 @@ int main(int argc, char *argv[])
                             country_to_cities_map[a].push_back(b);
                         }
                     }
-                    else
+                    else //Connection dropped after fetching countries but before finishing cities; reset
                     {
-                        //TODO: cities call failed! goto disconnected loop
+                        country_to_cities_map.clear();
+
+                        break;
                     }
                 }
+                
+                g_signal_connect(G_OBJECT(tray_icon), 
+                    "activate", 
+                    G_CALLBACK([]()
+                    {
+                        show_menu();
+                    }),
+                    nullptr);
+
+                STATE = state_type::status_loop;
             }
             else
             {
                 //TODO: countries failed, go to disconnected loop
             }
-        }
+        } break;
 
+        case state_type::status_loop:
+        {
+            if (auto oStatus = get_nordvpn_status(); oStatus.has_value())
+            {
+                auto &status = *oStatus;
+
+                if (status["Status"] == "Connected") 
+                {
+                    set_icon(icon_name::connected);
+                    
+                    set_tooltip(
+                        status["Country"] + ", " + status["City"] + "\n" + 
+                        status["Current server"] + "\n" +
+                        status["Your new IP"] + "\n" +
+                        status["Transfer"] + "\n" +
+                        "Uptime: " + status["Uptime"]);
+                }
+                else if (status["Status"] == "Disconnected") 
+                {
+                    set_icon(icon_name::disconnected);
+
+                    set_tooltip("disconnected");
+                }
+            }
+            else
+            {
+                set_icon(icon_name::error);
+
+                set_tooltip("status failed. Is the internet connection down?");
+            }
+        } break;
+    }
+
+    return true;
+}
+// =============== CONFIG STUFF
+//header
+#include <filesystem>
+///
+/// \brief: lib for accessing local paths in platform independent way,
+/// meant to be used in implementation of datamodel factories etc.
+/// linux impl follows freedesktop format for user directories
+/// https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html#referencing
+//TODO: consider shared directories e.g: /var/log/appname, etc.
+namespace jfc
+{
+    class application_directory_paths final // make const etc
+    {
+        std::string m_config_dir;
+        std::string m_cache_dir; 
+        std::string m_data_dir; 
+
+    public:
+        /// \brief ~/.conf/appname [on linux]
+        const std::string &get_config_dir() const;
+
+        /// \brief ~/.cache/appname [on linux]
+        const std::string &get_cache_dir() const;
+
+        /// \brief ~/.local/share/appname [on linux]
+        const std::string &get_data_dir() const;
+
+        application_directory_paths(std::string aApplicationName);
+    };
+}
+
+//cpp
+#include <jfcnordvpnicon/buildinfo.h> //TODO: this will change when its a separate lib
+namespace jfc
+{
+    namespace fs = std::filesystem;
+
+    application_directory_paths::application_directory_paths(std::string aApplicationName)
+    {
+#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin //...
+        const std::string home(std::getenv("HOME"));
+
+        m_config_dir = home + "/.config/"      + aApplicationName + "/";
+        m_cache_dir  = home + "/.cache/"       + aApplicationName + "/";
+        m_data_dir   = home + "/.local/share/" + aApplicationName + "/";
+#elif defined JFC_TARGET_PLATFORM_Windows
+    //windows api to get user's appdata path...
+#else
+#error "unsupported platform"
+#endif
+    };
+
+    const std::string &application_directory_paths::get_config_dir() const 
+    { 
+        if (!fs::exists(m_config_dir)) fs::create_directories(m_config_dir);
+
+        return m_config_dir; 
+    }
+    
+    const std::string &application_directory_paths::get_cache_dir() const 
+    { 
+        if (!fs::exists(m_cache_dir)) fs::create_directories(m_cache_dir);
+
+        return m_cache_dir; 
+    }
+    
+    const std::string &application_directory_paths::get_data_dir() const 
+    { 
+        if (!fs::exists(m_data_dir)) fs::create_directories(m_data_dir);
+
+        return m_data_dir; 
+    }
+}
+
+// -- usage --
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <iostream>
+#include <ctime>
+#include <chrono>
+
+class appdata final
+{
+    jfc::application_directory_paths path;
+
+public:
+    void write_to_log_file(const std::string &aMessage);
+
+    appdata();
+};
+
+appdata::appdata()
+: path("nordvpn_icon")
+{
+}
+
+void appdata::write_to_log_file(const std::string &aMessage)
+{
+    std::ofstream m_logfile(path.get_data_dir() + "crash.log", std::ios::app);
+
+    auto itt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+    m_logfile << std::put_time(std::gmtime(&itt), "%FT%T: ") << aMessage << "\n";
+}
+
+// =============== END CONFIG STUFF
+#define JFC_IS_TTY_IMPLEMENTATION
+
+// === IS_TTY -> tiny header only project to determine if a file refers to a tty
+//header
+#include <cstdio>
+
+namespace jfc
+{
+    bool is_tty(decltype(stdout) aStream = stdout);
+}
+
+#ifdef JFC_IS_TTY_IMPLEMENTATION
+    #if _WIN32
+        #include <io.h>
+    #else
+        #include <unistd.h>
+    #endif
+bool jfc::is_tty(decltype(stdout) aStream)
+{
+    #if _WIN32
+    return _isatty(_fileno(stdout));
+    #else
+    return isatty(fileno(stdout));
+    #endif
+}
+#endif
+
+// === END IS_TTY
+
+int main(int argc, char *argv[])
+{
+    appdata data;
+
+    if (jfc::is_tty()) 
+    {
+        std::cout << "=== " << jfcnordvpnicon_BuildInfo_ProjectName << " ===\n" 
+            "Linux system tray icon frontend for the nordvpn cli.\n"
+            "=== WARNING ===\n"
+            "You are running this program from a TTY.\n"
+            "Basic functionality will work but you will not be able to choose country/city.\n"
+            "This is because some of nordvpn's outputs are structured differently when called from a process with a TTY\n"
+            "This program has been designed to run \"in the background\", and therefore expects no associated TTY\n"
+            "=== build info ===\n"
+            "project remote: " << jfcnordvpnicon_BuildInfo_Git_Remote_URL << "\n"
+            "git hash: " << jfcnordvpnicon_BuildInfo_Git_Commit << "\n"
+            "build date: " << jfcnordvpnicon_BuildInfo_Git_Date << "\n";
+    }
+
+    try
+    {
         gtk_init(&argc, &argv);
 
         auto pCombo = gtk_combo_box_new();
@@ -524,14 +713,6 @@ int main(int argc, char *argv[])
         if (tray_icon = gtk_status_icon_new())
         {
             gtk_status_icon_set_visible (tray_icon, true);
-
-            g_signal_connect(G_OBJECT(tray_icon), 
-                "activate", 
-                G_CALLBACK([]()
-                {
-                    show_menu();
-                }),
-                nullptr);
 
             icons = init_icons();
 
@@ -561,6 +742,7 @@ int main(int argc, char *argv[])
     catch (const std::exception e)
     {
         std::cout << "error: " << e.what() << "\n";
+        data.write_to_log_file(e.what());
     }
 
     return EXIT_SUCCESS;
