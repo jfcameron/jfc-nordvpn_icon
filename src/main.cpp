@@ -647,6 +647,7 @@ appdata::appdata()
 : path("nordvpn_icon")
 {}
 
+#include <iomanip>//put_time
 void appdata::write_to_log_file(const std::string &aMessage)
 {
     std::ofstream m_logfile(path.get_data_dir() + "crash.log", std::ios::app);

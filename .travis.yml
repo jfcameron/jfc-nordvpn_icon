@@ -28,7 +28,7 @@ matrix:
           cd workspace
           git submodule update --init --recursive
           git remote rename master origin
-          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native" #-pedantic"
+          cmake .. -DJFC_BUILD_DOCS=OFF -DCMAKE_CXX_FLAGS="-Wall -Wextra -Ofast -flto -funroll-loops -m64 -march=native -Wno-deprecated-declarations" #-pedantic"
           cmake --build .
           #ctest --extra-verbose
 
