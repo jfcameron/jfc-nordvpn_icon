@@ -12,6 +12,7 @@
 #include <string>
 #include <string>
 #include <vector>
+#include <locale>
 
 #include <gtk/gtk.h>
 #include <glib.h>
@@ -121,15 +122,13 @@ std::optional<std::stringstream> run_command(const std::string &aCommand)
 }
 
 /// \brief used to skip junk found at the beginning of some output
-//TODO: end is trustworthy. walk backward until last nonwhitespace?
-// TODO: this is not reliable. The problem are ^ms and whitespace that nord outputs at the beginning of some of its outputs.
-size_t find_first_alpha(const std::string &line)
+size_t find_first_capital_alpha(const std::string &line)
 {
     size_t begin_offset(0);
 
     for (size_t i(0); i < line.size(); ++i)
     {
-        if (std::isalpha(line[i])) 
+        if (std::isalpha(line[i]) && std::isupper(line[i])) 
         {
             begin_offset = i;
 
@@ -158,7 +157,7 @@ const std::optional<nordvpn_status_type> get_nordvpn_status()
                 search != std::string::npos && 
                 search < line.size() - DELIMITER.size())
             {
-                const auto offset = find_first_alpha(line);
+                const auto offset = find_first_capital_alpha(line);
 
                 state[line.substr(offset, search - offset)] = 
                     line.substr(search + DELIMITER.size(), line.size());
@@ -536,6 +535,19 @@ static bool update()
 
                     set_tooltip("disconnected");
                 }
+                else
+                {
+                    std::stringstream ss;
+
+                    ss << "Status unknown. Status datamodel dump:\n";
+
+                    for (const auto [key, value] : status)
+                    {
+                        ss << key << ", " << value << "\n";
+                    }
+
+                    set_tooltip(ss.str().c_str());
+                }
             }
             else
             {
@@ -559,7 +571,7 @@ static bool update()
 //TODO: consider shared directories e.g: /var/log/appname, etc.
 namespace jfc
 {
-    class application_directory_paths final // make const etc
+    class application_directories final // make const etc
     {
         std::string m_config_dir;
         std::string m_cache_dir; 
@@ -575,7 +587,7 @@ namespace jfc
         /// \brief ~/.local/share/appname [on linux]
         const std::string &get_data_dir() const;
 
-        application_directory_paths(std::string aApplicationName);
+        application_directories(std::string aApplicationName);
     };
 }
 
@@ -585,7 +597,7 @@ namespace jfc
 {
     namespace fs = std::filesystem;
 
-    application_directory_paths::application_directory_paths(std::string aApplicationName)
+    application_directories::application_directories(std::string aApplicationName)
     {
 //TODO: since this COULD be a very tiny library, do header only and get rid of my cmake stuff here
 #if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin //...
@@ -596,29 +608,36 @@ namespace jfc
         m_data_dir   = home + "/.local/share/" + aApplicationName + "/";
 #elif defined JFC_TARGET_PLATFORM_Windows
     //windows api to get user's appdata path...
-#error "unimplemented platform"
+        const std::string appdata(std::getenv("appdata"));
+
+        m_config_dir = appdata + aApplicationName + "/config" + "/";
+        m_cache_dir  = appdata + aApplicationName + "/cache"  + "/";
+        m_data_dir   = appdata + aApplicationName + "/data"   + "/";
 #else
 #error "unsupported platform"
 #endif
     };
 
-    const std::string &application_directory_paths::get_config_dir() const 
+    const std::string &application_directories::get_config_dir() const 
     { 
-        if (!fs::exists(m_config_dir)) fs::create_directories(m_config_dir);
+        if (!fs::exists(m_config_dir)) if (!fs::create_directories(m_config_dir))
+            throw std::runtime_error("could not create directory: " + m_config_dir);
 
         return m_config_dir; 
     }
     
-    const std::string &application_directory_paths::get_cache_dir() const 
+    const std::string &application_directories::get_cache_dir() const 
     { 
-        if (!fs::exists(m_cache_dir)) fs::create_directories(m_cache_dir);
+        if (!fs::exists(m_cache_dir)) if (!fs::create_directories(m_cache_dir))
+            throw std::runtime_error("could not create directory: " + m_cache_dir);
 
         return m_cache_dir; 
     }
     
-    const std::string &application_directory_paths::get_data_dir() const 
+    const std::string &application_directories::get_data_dir() const 
     { 
-        if (!fs::exists(m_data_dir)) fs::create_directories(m_data_dir);
+        if (!fs::exists(m_data_dir)) if (!fs::create_directories(m_data_dir)) 
+            throw std::runtime_error("could not create directory: " + m_data_dir);
 
         return m_data_dir; 
     }
@@ -633,7 +652,7 @@ namespace jfc
 
 class appdata final
 {
-    jfc::application_directory_paths path;
+    jfc::application_directories path;
 
 public:
     void write_to_log_file(const std::string &aMessage);
