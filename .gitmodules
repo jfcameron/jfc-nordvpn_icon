@@ -1,3 +1,6 @@
 [submodule "cmake/jfc-cmake"]
 	path = cmake/jfc-cmake
 	url = https://github.com/jfcameron/jfc-cmake.git
+[submodule "thirdparty/jfc-application_paths"]
+	path = thirdparty/jfc-application_paths
+	url = https://github.com/jfcameron/jfc-application_paths.git

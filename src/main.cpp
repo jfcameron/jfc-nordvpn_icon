@@ -1,21 +1,22 @@
 // © 2021 Joseph Cameron - All Rights Reserved
-#include <optional>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <iostream>
-#include <iostream>
+#include <locale>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <string>
 #include <vector>
-#include <locale>
 
 #include <gtk/gtk.h>
 #include <glib.h>
+
+#define JFC_APPLICATION_PATHS_IMPLEMENTATION
+#include <jfc/application_paths.h>
 
 //TODO: refactor graphics
 // =-=-=-=-= ICON GRAPHICS LOADING =-=-=-=-=
@@ -265,16 +266,35 @@ const std::optional<nordvpn_cities_type> get_nordvpn_cities(const nordvpn_countr
     return {};
 }
 
+#include <sys/types.h> // for forks
+#include <unistd.h>
+
+static pid_t pID = -1;
+
 /// \brief connects to the specified country and city
 void nordvpn_connect(const std::string &aCountry, const std::string &aCity)
 {
-    run_command("nordvpn connect " + aCountry + " " + aCity);
+    if (pID > 0) // >0 indicates pID refers to a child
+        kill(pID, SIGKILL);
+
+    pID = fork();
+
+    if (pID == 0) // This is the child process
+    {
+        run_command("nordvpn connect " + aCountry + " " + aCity);
+
+        exit(EXIT_SUCCESS);
+    }
+    else if (pID < 0)
+    {
+        //fork failed
+    }
 }
 
 /// \brief connects to the specified country, or default if unspecified
 void nordvpn_connect(const std::string &aCountry = "")
 {
-    run_command("nordvpn connect " + aCountry);
+    nordvpn_connect(aCountry, "");   //run_command("nordvpn connect " + aCountry);
 }
 
 /// \brief disconnects from the vpn
@@ -326,18 +346,6 @@ void add_menu_item(GtkMenu *menu, const std::string &aName,
     gtk_label_set_markup(GTK_LABEL(label), aName.c_str());
 
     gtk_container_add(GTK_CONTAINER(hbox), label);
-
-    //if(icon)
-    {
-        //GtkWidget* image = gtk_image_new_from_icon_name(icon, 
-        //GTK_ICON_SIZE_MENU);
-        //gtk_container_add(GTK_CONTAINER(hbox), image);
-    }
-
-    //if(tooltip) 
-    {
-        //systray_set_tooltip(item, tooltip);
-    }
 
     if (aOnClick)
     {
@@ -535,6 +543,12 @@ static bool update()
 
                     set_tooltip("disconnected");
                 }
+                else if (status["Status"] == "Reconnecting")
+                {
+                    set_icon(icon_name::error);
+
+                    set_tooltip("reconnecting.");
+                }
                 else
                 {
                     std::stringstream ss;
@@ -560,88 +574,6 @@ static bool update()
 
     return true;
 }
-// =============== CONFIG STUFF
-//header
-#include <filesystem>
-///
-/// \brief: lib for accessing local paths in platform independent way,
-/// meant to be used in implementation of datamodel factories etc.
-/// linux impl follows freedesktop format for user directories
-/// https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html#referencing
-//TODO: consider shared directories e.g: /var/log/appname, etc.
-namespace jfc
-{
-    class application_directories final // make const etc
-    {
-        std::string m_config_dir;
-        std::string m_cache_dir; 
-        std::string m_data_dir; 
-
-    public:
-        /// \brief ~/.conf/appname [on linux]
-        const std::string &get_config_dir() const;
-
-        /// \brief ~/.cache/appname [on linux]
-        const std::string &get_cache_dir() const;
-
-        /// \brief ~/.local/share/appname [on linux]
-        const std::string &get_data_dir() const;
-
-        application_directories(std::string aApplicationName);
-    };
-}
-
-//cpp
-#include <jfcnordvpnicon/buildinfo.h> //TODO: this will change when its a separate lib
-namespace jfc
-{
-    namespace fs = std::filesystem;
-
-    application_directories::application_directories(std::string aApplicationName)
-    {
-//TODO: since this COULD be a very tiny library, do header only and get rid of my cmake stuff here
-#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin //...
-        const std::string home(std::getenv("HOME"));
-
-        m_config_dir = home + "/.config/"      + aApplicationName + "/";
-        m_cache_dir  = home + "/.cache/"       + aApplicationName + "/";
-        m_data_dir   = home + "/.local/share/" + aApplicationName + "/";
-#elif defined JFC_TARGET_PLATFORM_Windows
-    //windows api to get user's appdata path...
-        const std::string appdata(std::getenv("appdata"));
-
-        m_config_dir = appdata + aApplicationName + "/config" + "/";
-        m_cache_dir  = appdata + aApplicationName + "/cache"  + "/";
-        m_data_dir   = appdata + aApplicationName + "/data"   + "/";
-#else
-#error "unsupported platform"
-#endif
-    };
-
-    const std::string &application_directories::get_config_dir() const 
-    { 
-        if (!fs::exists(m_config_dir)) if (!fs::create_directories(m_config_dir))
-            throw std::runtime_error("could not create directory: " + m_config_dir);
-
-        return m_config_dir; 
-    }
-    
-    const std::string &application_directories::get_cache_dir() const 
-    { 
-        if (!fs::exists(m_cache_dir)) if (!fs::create_directories(m_cache_dir))
-            throw std::runtime_error("could not create directory: " + m_cache_dir);
-
-        return m_cache_dir; 
-    }
-    
-    const std::string &application_directories::get_data_dir() const 
-    { 
-        if (!fs::exists(m_data_dir)) if (!fs::create_directories(m_data_dir)) 
-            throw std::runtime_error("could not create directory: " + m_data_dir);
-
-        return m_data_dir; 
-    }
-}
 
 // -- usage --
 #include <nlohmann/json.hpp>
@@ -652,7 +584,7 @@ namespace jfc
 
 class appdata final
 {
-    jfc::application_directories path;
+    jfc::application_paths path;
 
 public:
     void write_to_log_file(const std::string &aMessage);
@@ -669,16 +601,17 @@ appdata::appdata()
 #include <iomanip>//put_time
 void appdata::write_to_log_file(const std::string &aMessage)
 {
-    std::ofstream m_logfile(path.get_data_dir() + "crash.log", std::ios::app);
+    std::ofstream m_logfile(path.data_dir().string() + "crash.log", std::ios::app); //TODO: work on a logger project
 
     auto itt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     m_logfile << std::put_time(std::gmtime(&itt), "%FT%T: ") << aMessage << "\n";
 }
 
+#include <jfcnordvpnicon/buildinfo.h> //TODO: this will change when its a separate lib
 void appdata::write_to_version_file()
 {
-    std::ofstream f(path.get_data_dir() + "version.txt");
+    std::ofstream f(path.data_dir().string() + "version.txt");
 
     f 
         << "project remote: " << jfcnordvpnicon_BuildInfo_Git_Remote_URL << "\n"
@@ -687,8 +620,8 @@ void appdata::write_to_version_file()
 }
 
 // =============== END CONFIG STUFF
-#define JFC_IS_TTY_IMPLEMENTATION
 
+#define JFC_IS_TTY_IMPLEMENTATION
 // === IS_TTY -> tiny header only project to determine if a file refers to a tty
 //header
 #include <cstdio>
