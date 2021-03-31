@@ -177,7 +177,6 @@ using nordvpn_country_type = std::string;
 /// \brief type used to model the return of nordvpn countries command
 using nordvpn_countries_type = std::vector<nordvpn_country_type>;
 
-//TODO: consider supporting TTY case
 /// \brief returns the nordvpn countries as a list
 const std::optional<nordvpn_countries_type> get_nordvpn_countries()
 {
@@ -219,7 +218,6 @@ const std::optional<nordvpn_countries_type> get_nordvpn_countries()
     return {};
 }
 
-//TODO: consider supporting TTY case
 /// \brief type used to model the return of nordvpn cities command
 using nordvpn_cities_type = std::vector<std::string>;
 
@@ -269,11 +267,11 @@ const std::optional<nordvpn_cities_type> get_nordvpn_cities(const nordvpn_countr
 #include <sys/types.h> // for forks
 #include <unistd.h>
 
-static pid_t pID = -1;
-
 /// \brief connects to the specified country and city
 void nordvpn_connect(const std::string &aCountry, const std::string &aCity)
 {
+    static pid_t pID = -1;
+
     if (pID > 0) // >0 indicates pID refers to a child
         kill(pID, SIGKILL);
 
@@ -294,7 +292,7 @@ void nordvpn_connect(const std::string &aCountry, const std::string &aCity)
 /// \brief connects to the specified country, or default if unspecified
 void nordvpn_connect(const std::string &aCountry = "")
 {
-    nordvpn_connect(aCountry, "");   //run_command("nordvpn connect " + aCountry);
+    nordvpn_connect(aCountry, "");
 }
 
 /// \brief disconnects from the vpn
@@ -302,7 +300,6 @@ void nordvpn_disconnect()
 {
     run_command("nordvpn disconnect");
 }
-
 
 /// \brief creates the popup menu
 GtkMenu *create_menu()
@@ -541,24 +538,28 @@ static bool update()
                 {
                     set_icon(icon_name::disconnected);
 
-                    set_tooltip("disconnected");
+                    set_tooltip("Disconnected");
+                }
+                else if (status["Status"] == "Connecting")
+                {
+                    set_icon(icon_name::initializing);
+                    
+                    set_tooltip("Connecting to " + status["City"] + ", " + status["Country"]);
                 }
                 else if (status["Status"] == "Reconnecting")
                 {
                     set_icon(icon_name::error);
-
-                    set_tooltip("reconnecting.");
+                    
+                    set_tooltip("Reconnecting to " + status["City"] + ", " + status["Country"]);
                 }
                 else
                 {
                     std::stringstream ss;
 
-                    ss << "Status unknown. Status datamodel dump:\n";
+                    ss << status["Status"] << "\n";
 
                     for (const auto [key, value] : status)
-                    {
-                        ss << key << ", " << value << "\n";
-                    }
+                        ss << key << ": " << value << "\n";
 
                     set_tooltip(ss.str().c_str());
                 }
@@ -608,7 +609,7 @@ void appdata::write_to_log_file(const std::string &aMessage)
     m_logfile << std::put_time(std::gmtime(&itt), "%FT%T: ") << aMessage << "\n";
 }
 
-#include <jfcnordvpnicon/buildinfo.h> //TODO: this will change when its a separate lib
+#include <jfcnordvpnicon/buildinfo.h>
 void appdata::write_to_version_file()
 {
     std::ofstream f(path.data_dir().string() + "version.txt");
